@@ -60,8 +60,35 @@ describe('Notification Tests', function(){
       });
     });
 
-    it('re-registers preserving creation time', function(){
+    it.only('registers adding fields to device record.', function(){
       var start = (new Date()).getTime() - 1
+      var ret = "nada";
+      var stub = sandbox.stub(datastore, "updateDocumentByOperations");
+      var stubGetDoc = sandbox.stub(datastore, 'getDocument');
+      stubGetDoc.returns( Promise.reject({isDeleted:true}) );
+      stub.returns( Promise.resolve(ret));
+
+      notifier.onRegisterUse(function(token, update, next){
+        console.log(token, update);
+        update.$set.setByMiddleware = "test";
+        next();
+      });
+      notifier.onRegisterUse(function(token, update, next){
+        console.log(token, update);
+        update.$set.setByMiddleware.should.equal("test")
+        update.$set.setByMiddleware = "pass";
+        next();
+      });
+      return notifier.registerDevice('12345678').then(function(result){
+        result.should.eql(ret);
+        var args = stub.firstCall.args;
+        stub.firstCall.args[0].should.equal(deviceNs + '12345678');
+        args[2].$set.setByMiddleware.should.equal("pass");
+      });
+    });
+
+    it('re-registers preserving creation time', function(){
+      var start = (new Date()).getTime() - 1;
       var ret = "nada";
       var stub = sandbox.stub(datastore, "updateDocumentByOperations");
       stub.returns( Promise.resolve(ret));
