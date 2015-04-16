@@ -1,4 +1,4 @@
-var Promise = require('bluebird')
+var Promise = require('bluebird');
 var chai = require('chai');
 var should = chai.should();
 chai.use(require('chai-things'));
@@ -26,7 +26,7 @@ describe('Notification Tests', function(){
     //called at more local levels below to allow tests that need spies to wire them first
     datastore = createMockDatastore();
     apn = createMockApn();
-    notifier = new Notifier({datastore:datastore, apnConnection:apn, apnFeedback:apn}); //, log:console});
+    notifier = new Notifier({datastore:datastore, apnConnection:apn, apnFeedback:apn});
   }
 
   beforeEach(function(){
@@ -42,8 +42,8 @@ describe('Notification Tests', function(){
 
     it('registers', function(){
       var start = (new Date()).getTime() - 1
-      var ret = "nada";
-      var stub = sandbox.stub(datastore, "updateDocumentByOperations");
+      var ret = 'nada';
+      var stub = sandbox.stub(datastore, 'updateDocumentByOperations');
       var stubGetDoc = sandbox.stub(datastore, 'getDocument');
       stubGetDoc.returns( Promise.reject({isDeleted:true}) );
       stub.returns( Promise.resolve(ret));
@@ -60,37 +60,32 @@ describe('Notification Tests', function(){
       });
     });
 
-    it.only('registers adding fields to device record.', function(){
-      var start = (new Date()).getTime() - 1
-      var ret = "nada";
-      var stub = sandbox.stub(datastore, "updateDocumentByOperations");
+    it('registers - request/response', function(){
+      var req = {body:{apntoken:'12345678'}};
+      var res = {
+        done:false,
+        body:false,
+        set: function(){return this;},
+        status: function(){return this;},
+        send:function(value){this.body=value; this.done=true;}
+      };
+      res.set = sandbox.spy(res, 'set');
+      res.status = sandbox.spy(res, 'status');
+      var stubUpdate = sandbox.stub(datastore, 'updateDocumentByOperations');
       var stubGetDoc = sandbox.stub(datastore, 'getDocument');
       stubGetDoc.returns( Promise.reject({isDeleted:true}) );
-      stub.returns( Promise.resolve(ret));
-
-      notifier.onRegisterUse(function(token, update, next){
-        console.log(token, update);
-        update.$set.setByMiddleware = "test";
-        next();
-      });
-      notifier.onRegisterUse(function(token, update, next){
-        console.log(token, update);
-        update.$set.setByMiddleware.should.equal("test")
-        update.$set.setByMiddleware = "pass";
-        next();
-      });
-      return notifier.registerDevice('12345678').then(function(result){
-        result.should.eql(ret);
-        var args = stub.firstCall.args;
-        stub.firstCall.args[0].should.equal(deviceNs + '12345678');
-        args[2].$set.setByMiddleware.should.equal("pass");
+      stubUpdate.returns( Promise.resolve({}));
+      notifier.register(req, res)
+      return waitFor(function(){return res.done;}).then(function(result){
+        stubUpdate.firstCall.args[0].should.equal(deviceNs + '12345678');
+        res.body.should.eql({status:'ok'})
       });
     });
 
     it('re-registers preserving creation time', function(){
       var start = (new Date()).getTime() - 1;
-      var ret = "nada";
-      var stub = sandbox.stub(datastore, "updateDocumentByOperations");
+      var ret = 'nada';
+      var stub = sandbox.stub(datastore, 'updateDocumentByOperations');
       stub.returns( Promise.resolve(ret));
       var stubGetDoc = sandbox.stub(datastore, 'getDocument');
       stubGetDoc.onCall(0).returns( Promise.reject({isDeleted:true}) );
@@ -127,10 +122,10 @@ describe('Notification Tests', function(){
 
     it('re-registers providing expired apn token', function(){
       var start = (new Date()).getTime() - 1;
-      var ret = "nada";
+      var ret = 'nada';
       var newToken = '12345678';
       var oldToken = '99887766';
-      var stubUpdate = sandbox.stub(datastore, "updateDocumentByOperations");
+      var stubUpdate = sandbox.stub(datastore, 'updateDocumentByOperations');
       var stubGetDoc = sandbox.stub(datastore, 'getDocument');
       stubGetDoc.withArgs(deviceNs + newToken).returns( Promise.reject({isDeleted:true}) );
       stubUpdate.withArgs(deviceNs + newToken).returns(Promise.resolve(ret));
@@ -160,17 +155,106 @@ describe('Notification Tests', function(){
       });
     });
 
-    it('handles error during update of expired apn token', function(){
+    it('registers adding fields to device record.', function(){
+      var start = (new Date()).getTime() - 1
+      var ret = 'nada';
+      var stub = sandbox.stub(datastore, 'updateDocumentByOperations');
+      var stubGetDoc = sandbox.stub(datastore, 'getDocument');
+      stubGetDoc.returns( Promise.reject({isDeleted:true}) );
+      stub.returns( Promise.resolve(ret));
+
+      notifier.onRegisterUse(function(token, update, oldDoc, next){
+        should.not.exist(oldDoc);
+        update.$set.setByMiddleware = 'test';
+        next();
+      });
+      notifier.onRegisterUse(function(token, update, oldDoc, next){
+        update.$set.setByMiddleware.should.equal('test');
+        update.$set.setByMiddleware = 'pass';
+        next();
+      });
+      return notifier.registerDevice('12345678').then(function(result){
+        result.should.eql(ret);
+        var args = stub.firstCall.args;
+        stub.firstCall.args[0].should.equal(deviceNs + '12345678');
+        args[2].$set.setByMiddleware.should.equal('pass');
+      });
+    });
+
+    it('de-registers adding fields to device record.', function(){
+      var start = (new Date()).getTime() - 1
+      var stubUpdate = sandbox.stub(datastore, 'updateDocumentByOperations');
+      var stubGetDoc = sandbox.stub(datastore, 'getDocument');
+      stubGetDoc.returns( Promise.resolve({_id:'12345678', enabled:'true', username:'bob'}) );
+      stubUpdate.returns( Promise.resolve({_id:'12345678', enabled:'false', username:'bob'}));
+
+      notifier.onDeregisterUse(function(token, update, next){
+        update.$set.setByMiddleware = 'test';
+        next();
+      });
+      notifier.onDeregisterUse(function(token, update, next){
+        update.$set.setByMiddleware.should.equal('test');
+        update.$set.setByMiddleware = 'pass';
+        next();
+      });
+      return notifier.deregisterDevice('12345678').then(function(result){
+        result.should.eql({_id:'12345678', enabled:'false', username:'bob'});
+        var args = stubUpdate.firstCall.args;
+        stubUpdate.firstCall.args[0].should.equal(deviceNs + '12345678');
+        args[2].$set.setByMiddleware.should.equal('pass');
+      });
+    });
+
+    it('re-registers providing expired apn token and adding to new device doc', function(){
       var start = (new Date()).getTime() - 1;
-      var ret = "nada";
       var newToken = '12345678';
       var oldToken = '99887766';
-      var stubUpdate = sandbox.stub(datastore, "updateDocumentByOperations");
+      var stubUpdate = sandbox.stub(datastore, 'updateDocumentByOperations');
+      var stubGetDoc = sandbox.stub(datastore, 'getDocument');
+      stubGetDoc.withArgs(deviceNs + newToken).returns( Promise.reject({isDeleted:true}) );
+      stubUpdate.withArgs(deviceNs + newToken).returns(Promise.resolve({}));
+      stubGetDoc.withArgs(deviceNs + oldToken).returns( Promise.resolve({_id:oldToken, enabled:'true', username:'bob'}) );
+      stubUpdate.withArgs(deviceNs + oldToken).returns(Promise.resolve(Promise.resolve({_id:oldToken, enabled:'true', username:'bob'})));
+
+      notifier.onRegisterUse(function(token, update, oldDoc, next){
+        should.exist(oldDoc);
+        update.$set.username = oldDoc.username;
+        update.$set.olddevice = oldDoc._id;
+        next();
+      });
+
+      return notifier.registerDevice(newToken, oldToken).then(function(result){
+        stubGetDoc.firstCall.args[0].should.equal(deviceNs + newToken);
+        stubGetDoc.secondCall.args[0].should.equal(deviceNs + oldToken);
+        //first call to update disables old device document
+        stubUpdate.firstCall.args[0].should.equal(deviceNs + oldToken);
+        var args = stubUpdate.firstCall.args;
+        args[0].should.equal(deviceNs + oldToken);
+        args[2].$set.enabled.should.equal(false);
+        args[2].$set.expired.should.equal(true);
+        args[2].$set.replacedByToken.should.equal(newToken);
+        //second call creates new device.
+        stubUpdate.secondCall.args[0].should.equal(deviceNs + newToken);
+        args = stubUpdate.secondCall.args;
+        args[0].should.equal(deviceNs + newToken);
+        var upd = args[2];
+        upd.$set.olddevice.should.equal(oldToken);
+        upd.$set.username.should.equal('bob')
+
+      });
+    });
+
+    it('handles error during update of expired apn token', function(){
+      var start = (new Date()).getTime() - 1;
+      var ret = 'nada';
+      var newToken = '12345678';
+      var oldToken = '99887766';
+      var stubUpdate = sandbox.stub(datastore, 'updateDocumentByOperations');
       var stubGetDoc = sandbox.stub(datastore, 'getDocument');
       stubGetDoc.withArgs(deviceNs + newToken).returns( Promise.reject({isDeleted:true}) );
       stubUpdate.withArgs(deviceNs + newToken).returns(Promise.resolve(ret));
       stubGetDoc.withArgs(deviceNs + oldToken).returns( Promise.resolve({_id:oldToken, enabled:'true'}) );
-      stubUpdate.withArgs(deviceNs + oldToken).throws(new Error("Fail!"));
+      stubUpdate.withArgs(deviceNs + oldToken).throws(new Error('Fail!'));
       return notifier.registerDevice(newToken, oldToken).then(function(result){
         result.should.eql(ret);
         stubGetDoc.firstCall.args[0].should.equal(deviceNs + newToken);
@@ -192,15 +276,15 @@ describe('Notification Tests', function(){
 
     it('handles rejection during update of expired apn token', function(){
       var start = (new Date()).getTime() - 1;
-      var ret = "nada";
+      var ret = 'nada';
       var newToken = '12345678';
       var oldToken = '99887766';
-      var stubUpdate = sandbox.stub(datastore, "updateDocumentByOperations");
+      var stubUpdate = sandbox.stub(datastore, 'updateDocumentByOperations');
       var stubGetDoc = sandbox.stub(datastore, 'getDocument');
       stubGetDoc.withArgs(deviceNs + newToken).returns( Promise.reject({isDeleted:true}) );
       stubUpdate.withArgs(deviceNs + newToken).returns(Promise.resolve(ret));
       stubGetDoc.withArgs(deviceNs + oldToken).returns( Promise.resolve({_id:oldToken, enabled:'true'}) );
-      stubUpdate.withArgs(deviceNs + oldToken).returns(Promise.reject(new Error("Fail!")));
+      stubUpdate.withArgs(deviceNs + oldToken).returns(Promise.reject(new Error('Fail!')));
       return notifier.registerDevice(newToken, oldToken).then(function(result){
         result.should.eql(ret);
         stubGetDoc.firstCall.args[0].should.equal(deviceNs + newToken);
@@ -222,9 +306,11 @@ describe('Notification Tests', function(){
 
 
     it('de-registers', function(){
-      var ret = "nada";
-      var stub = sandbox.stub(datastore, "updateDocumentByOperations");
+      var ret = 'nada';
+      var stub = sandbox.stub(datastore, 'updateDocumentByOperations');
       stub.returns( Promise.resolve(ret));
+      var stubGetDoc = sandbox.stub(datastore, 'getDocument');
+      stubGetDoc.returns( Promise.resolve({}) );
       return notifier.deregisterDevice('12345678').then(function(result){
         result.should.eql(ret);
         var args = stub.firstCall.args;
@@ -236,8 +322,60 @@ describe('Notification Tests', function(){
       });
     });
 
-    //todo call through res, resp, next function and verify results.
+    it('de-registers a non-existent device', function(){
+      var stubGetDoc = sandbox.stub(datastore, 'getDocument');
+      var stubUpdate = sandbox.stub(datastore, 'updateDocumentByOperations');
+      stubUpdate.returns( Promise.resolve({}));
+      stubGetDoc.returns( Promise.reject({isDeleted:true}) );
+      return notifier.deregisterDevice('12345678').then(function(result){
+        stubUpdate.called.should.equal(false);
+        stubGetDoc.firstCall.args[0].should.equal(deviceNs + '12345678');
+      });
+    });
 
+    it('deregisters - request/response', function(){
+      var req = {body:{apntoken:'12345678'}};
+      var res = {
+        done:false,
+        body:false,
+        set: function(){return this;},
+        status: function(){return this;},
+        send:function(value){this.body=value; this.done=true;}
+      };
+      res.set = sandbox.spy(res, 'set');
+      res.status = sandbox.spy(res, 'status');
+      var stubUpdate = sandbox.stub(datastore, 'updateDocumentByOperations');
+      var stubGetDoc = sandbox.stub(datastore, 'getDocument');
+      stubGetDoc.returns( Promise.resolve({}) );
+      stubUpdate.returns( Promise.resolve({}));
+      notifier.deregister(req, res);
+      return waitFor(function(){return res.done;}).then(function(result){
+        stubUpdate.firstCall.args[0].should.equal(deviceNs + '12345678');
+        res.body.should.eql({status:'ok'})
+      });
+    });
+
+    it('deregisters nonexistent - request/response', function(){
+      var req = {body:{apntoken:'12345678'}};
+      var res = {
+        done:false,
+        body:false,
+        set: function(){return this;},
+        status: function(){return this;},
+        send:function(value){this.body=value, this.done=true;}
+      };
+      res.set = sandbox.spy(res, 'set');
+      res.status = sandbox.spy(res, 'status');
+      var stubUpdate = sandbox.stub(datastore, 'updateDocumentByOperations');
+      var stubGetDoc = sandbox.stub(datastore, 'getDocument');
+      stubGetDoc.returns( Promise.reject({isDeleted:true}) );
+      stubUpdate.returns( Promise.resolve({}));
+      notifier.deregister(req, res);
+      return waitFor(function(){return res.done;}).then(function(result){
+        stubUpdate.called.should.equal(false);
+        stubGetDoc.firstCall.args[0].should.equal(deviceNs + '12345678');
+      });
+    });
 
   });  //device registration
 
@@ -247,16 +385,25 @@ describe('Notification Tests', function(){
     beforeEach(function(){setup();});
 
     it('notifies', function(){
-      var stub_findAll = sandbox.stub(datastore, "findAll", function(collection, query){
+      var stub_findAll = sandbox.stub(datastore, 'findAll', function(collection, query){
         return Promise.resolve([{_id:'12345678', status:'ok', enabled:true}, {_id:'87654321', status:'ok', enabled:true}]);
       });
-      var stub_pushNotification = sandbox.stub(apn, "pushNotification", function(notification, device){
-        //console.log(device, notification);
+      var stub_pushNotification = sandbox.stub(apn, 'pushNotification', function(notification, device){
+        //console.log('pushNotification:  ', device, notification);
       });
-      //todo validate args etc.
-
       return notifier.notify().then(function(result){
-        //console.log(result);
+        var args = stub_pushNotification.firstCall.args;
+        args[1].toString().should.equal('12345678');
+        args[0].payload.should.eql({LowlaDB:{}});
+        args[0].contentAvailable.should.equal('1');
+        args[0].priority.should.equal(5);  //required on silent/content-available
+        args[0].expiry.should.be.above(toUnixEpochSeconds(Date.now()));
+        args = stub_pushNotification.secondCall.args;
+        args[1].toString().should.equal('87654321');
+        args[0].payload.should.eql({LowlaDB:{}});
+        args[0].contentAvailable.should.equal('1');
+        args[0].priority.should.equal(5);  //required on silent/content-available
+        args[0].expiry.should.be.above(toUnixEpochSeconds(Date.now()));
         return result;
       })
     })
@@ -271,43 +418,43 @@ describe('Notification Tests', function(){
      */
     beforeEach(function() {
       //init spies prior to setup where objects are created
-      sandbox.spy(Notifier.prototype, "_onFeedback");
-      sandbox.spy(Notifier.prototype, "_onFeedbackError");
-      sandbox.spy(Notifier.prototype, "_onFeedbackConnectionError");
+      sandbox.spy(Notifier.prototype, '_onFeedback');
+      sandbox.spy(Notifier.prototype, '_onFeedbackError');
+      sandbox.spy(Notifier.prototype, '_onFeedbackConnectionError');
       setup();
     });
 
     it('mock feedback event fires', function(){
       var feedbackResult = [{time:123, device:new Device('4567')}];
-      return apn.fireEvent("feedback", 1, [feedbackResult]).then(function(){
+      return apn.fireEvent('feedback', 1, [feedbackResult]).then(function(){
         notifier._onFeedback.firstCall.args[0].should.eql(feedbackResult);
       });
     });
 
     it('mock feedback error event fires', function(){
-      var feedbackErr = new Error("something went wrong");
-      return apn.fireEvent("feedbackError", 1, feedbackErr).then(function(){
+      var feedbackErr = new Error('something went wrong');
+      return apn.fireEvent('feedbackError', 1, feedbackErr).then(function(){
         notifier._onFeedbackError.firstCall.args[0].should.eql(feedbackErr);
       });
     });
 
     it('mock feedback connection error event fires', function(){
-      var feedbackErr = new Error("something went wrong");
-      return apn.fireEvent("error", 1, feedbackErr).then(function(){
+      var feedbackErr = new Error('something went wrong');
+      return apn.fireEvent('error', 1, feedbackErr).then(function(){
         notifier._onFeedbackConnectionError.firstCall.args[0].should.eql(feedbackErr);
       });
     });
 
     it('feedback deregisters device', function(){
-      var ret = "nada!";
+      var ret = 'nada!';
       var tsLastReg = new Date(1427031118651);
       var tsFeedback = toUnixEpochSeconds(tsLastReg.getTime()) + 1;
-      var stubUpdate = sandbox.stub(datastore, "updateDocumentByOperations");
+      var stubUpdate = sandbox.stub(datastore, 'updateDocumentByOperations');
       stubUpdate.returns( Promise.resolve(ret));
       var stubGetDoc = sandbox.stub(datastore, 'getDocument');
       stubGetDoc.returns( Promise.resolve({_id:'12345678', status:'ok', enabled:'true', modified:tsLastReg.getTime(), registered:9}) );
       var feedbackResult = [{time:tsFeedback, device:new Device('12345678')}];
-      return apn.fireEvent("feedback", 1, [feedbackResult]).then(function(){
+      return apn.fireEvent('feedback', 1, [feedbackResult]).then(function(){
         notifier._onFeedback.firstCall.args[0].should.eql(feedbackResult);
         return waitFor(function(){return stubUpdate.calledOnce;}, 100, 5000).then(function(){
           var args = stubUpdate.firstCall.args;
@@ -325,15 +472,15 @@ describe('Notification Tests', function(){
     });
 
     it('feedback doesn\'t deregister if registered since', function(){
-      var ret = "nada";
+      var ret = 'nada';
       var tsLastReg = new Date(1427031118651);
       var tsFeedback = toUnixEpochSeconds(tsLastReg.getTime()) - 1;
-      var stubUpdate = sandbox.stub(datastore, "updateDocumentByOperations");
+      var stubUpdate = sandbox.stub(datastore, 'updateDocumentByOperations');
       stubUpdate.returns( Promise.resolve(ret));
       var stubGetDoc = sandbox.stub(datastore, 'getDocument');
       stubGetDoc.returns( Promise.resolve({_id:'12345678', status:'ok', enabled:'true', modified:tsLastReg, registered:9, feedback:2}) )
       var feedbackResult = [{time:tsFeedback, device:new Device('12345678')}];
-      return apn.fireEvent("feedback", 1, [feedbackResult]).then(function(){
+      return apn.fireEvent('feedback', 1, [feedbackResult]).then(function(){
         notifier._onFeedback.firstCall.args[0].should.eql(feedbackResult);
         return waitFor(function(){return stubUpdate.calledOnce;}, 100, 5000).then(function() {
           var args = stubUpdate.firstCall.args;
@@ -349,14 +496,14 @@ describe('Notification Tests', function(){
     });
 
     it('feedback doesn\'t deregister if registered same time', function(){
-      var ret = "nada";
+      var ret = 'nada';
       var ts = new Date(1427030958618000); //must end 000 since feedback deals in seconds
-      var stubUpdate = sandbox.stub(datastore, "updateDocumentByOperations");
+      var stubUpdate = sandbox.stub(datastore, 'updateDocumentByOperations');
       stubUpdate.returns( Promise.resolve(ret));
       var stubGetDoc = sandbox.stub(datastore, 'getDocument');
       stubGetDoc.returns( Promise.resolve({_id:'12345678', status:'ok', enabled:'true', modified:ts, registered:9, feedback:2}) )
       var feedbackResult = [{time:toUnixEpochSeconds(ts.getTime()), device:new Device('12345678')}];
-      return apn.fireEvent("feedback", 1, [feedbackResult]).then(function(){
+      return apn.fireEvent('feedback', 1, [feedbackResult]).then(function(){
         notifier._onFeedback.firstCall.args[0].should.eql(feedbackResult);
         return waitFor(function(){return stubUpdate.calledOnce;}, 100, 5000).then(function() {
           var args = stubUpdate.firstCall.args;
@@ -389,7 +536,7 @@ describe('Notification Tests', function(){
     function _getDelayedPromise(cnt){
       ++cnt;
       if(undefined!==maxTimes && maxTimes < cnt){
-        throw new Error("waitFor exceeded maxLoops: " + maxTimes);
+        throw new Error('waitFor exceeded maxLoops: ' + maxTimes);
       }
       return Promise.delay(msInterval).then(function(){
         if(testFunction()){
@@ -425,7 +572,7 @@ describe('Notification Tests', function(){
     }
     util.inherits(_apn, events.EventEmitter);
     _apn.prototype.pushNotification = function(notification, deviceId){
-      throw new Error("pushNotification not implemented");
+      throw new Error('pushNotification not implemented');
     };
     _apn.prototype.fireEvent= function(name, msDelay, argArray){
       var thisapn = this;
