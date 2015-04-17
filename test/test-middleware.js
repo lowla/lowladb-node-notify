@@ -124,7 +124,6 @@ describe('Middleware', function(){
     });
 
     return middleware.execute(first, second, third).then(function(args){
-      console.log(args);
       throw new Error('did not receive expected error from chain');
     }).catch( function(err){
       err.should.be.an.instanceOf(Error);
@@ -147,7 +146,6 @@ describe('Middleware', function(){
     middleware.use(errFn);
 
     return middleware.execute(first, second, third).then(function(args){
-      console.log(args);
       throw new Error('did not receive expected error from chain');
     }).catch( function(err){
       err.should.be.an.instanceOf(Error);
@@ -180,7 +178,6 @@ describe('Middleware', function(){
     });
 
     return middleware.execute(first, second, third).then(function(args){
-      console.log(args);
       throw new Error('did not receive expected error from chain');
     }).catch( function(err){
       err.should.be.an.instanceOf(Error);
@@ -216,7 +213,6 @@ describe('Middleware', function(){
     });
 
     return middleware.execute(first, second, third).then(function(args){
-      console.log(args);
       throw new Error('did not receive expected error from chain');
     }).catch( function(err){
       err.should.be.an.instanceOf(Error);
@@ -295,7 +291,6 @@ describe('Middleware', function(){
     });
 
     return middleware.execute(first, second, third).then(function(args){
-      console.log(args);
       throw new Error('did not receive expected error from chain');
     }).catch( function(err){
       err.should.be.an.instanceOf(Error);
@@ -333,7 +328,6 @@ describe('Middleware', function(){
     });
 
     return middleware.execute(first, second, third).then(function(args){
-      console.log(args);
       throw new Error('did not receive expected error from chain');
     }).catch( function(err){
       err.should.be.an.instanceOf(Error);
@@ -366,7 +360,6 @@ describe('Middleware', function(){
     });
 
     return middleware.execute(first, second, third).then(function(args){
-      console.log(args);
       throw new Error('did not receive expected error from chain');
     }).catch( function(err){
       err.should.be.an.instanceOf(Error);
@@ -459,7 +452,7 @@ describe('Middleware', function(){
 
       var mwLog = new MiddlewareLogger();
       mwLog.useLogger(realLog);
-      mwLog.useLogger(console);
+      //mwLog.useLogger(console);
 
       return mwLog.debug('debug', 'one', objectToLog, 'two')
         .then(function(){
@@ -485,6 +478,37 @@ describe('Middleware', function(){
           realLog.warn.args[0].should.eql(['warn']);
           realLog.info.args[0].should.eql(['info']);
           realLog.log.args[0].should.eql(['log']);
+        });
+    });
+
+    it('respects requested level', function(){
+      var realLog = getTestLogger();
+
+      var mwLog = new MiddlewareLogger();
+      mwLog.useLogger(realLog, 'warn');
+      //mwLog.useLogger(console, 'log');
+
+      return mwLog.debug('debug', 'one', objectToLog, 'two')
+        .then(function(){
+          return mwLog.error('error')
+        }).then(function(){
+          return mwLog.warn('warn');
+        }).then(function(){
+          return mwLog.debug('debug2');
+        }).then(function(){
+          return mwLog.info('info');
+        }).then(function(){
+          return mwLog.debug('debug3', 3);
+        }).then(function(){
+          return mwLog.debug('debug4', functionToLog, 'test', 4);
+        }).then(function(){
+          return mwLog.log('log');
+        }).then(function(){
+          realLog.debug.args.length.should.equal(0);
+          realLog.error.args[0].should.eql(['error']);
+          realLog.warn.args[0].should.eql(['warn']);
+          realLog.info.args.length.should.equal(0);
+          realLog.log.args.length.should.equal(0);
         });
     });
 
