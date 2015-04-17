@@ -131,7 +131,7 @@ describe('Notification Tests', function(){
       stubUpdate.withArgs(deviceNs + newToken).returns(Promise.resolve(ret));
       stubGetDoc.withArgs(deviceNs + oldToken).returns( Promise.resolve({_id:oldToken, enabled:'true'}) );
       stubUpdate.withArgs(deviceNs + oldToken).returns(Promise.resolve(ret));
-      return notifier.registerDevice(newToken, oldToken).then(function(result){
+      return notifier.registerDevice(newToken, {}, oldToken).then(function(result){
         result.should.eql(ret);
         stubGetDoc.firstCall.args[0].should.equal(deviceNs + newToken);
         stubGetDoc.secondCall.args[0].should.equal(deviceNs + oldToken);
@@ -140,7 +140,7 @@ describe('Notification Tests', function(){
         var args = stubUpdate.firstCall.args;
         args[0].should.equal(deviceNs + oldToken);
         args[2].$set.enabled.should.equal(false);
-        args[2].$set.expired.should.equal(true);
+        args[2].$set.status.should.equal('replaced');
         args[2].$set.replacedByToken.should.equal(newToken);
         //second call creates new device.
         stubUpdate.secondCall.args[0].should.equal(deviceNs + newToken);
@@ -157,23 +157,26 @@ describe('Notification Tests', function(){
 
     it('registers adding fields to device record.', function(){
       var start = (new Date()).getTime() - 1
+      var context = {request:{test:'ok'}};
       var ret = 'nada';
       var stub = sandbox.stub(datastore, 'updateDocumentByOperations');
       var stubGetDoc = sandbox.stub(datastore, 'getDocument');
       stubGetDoc.returns( Promise.reject({isDeleted:true}) );
       stub.returns( Promise.resolve(ret));
 
-      notifier.onRegisterUse(function(token, update, oldDoc, next){
-        should.not.exist(oldDoc);
+      notifier.onRegisterUse(function(token, update, context, next){
+        should.not.exist(context.previousDeviceDocument);
+        should.not.exist(context.currentDeviceDocument);
+        context.isNewDevice.should.equal(true);
         update.$set.setByMiddleware = 'test';
         next();
       });
-      notifier.onRegisterUse(function(token, update, oldDoc, next){
+      notifier.onRegisterUse(function(token, update, context, next){
         update.$set.setByMiddleware.should.equal('test');
         update.$set.setByMiddleware = 'pass';
         next();
       });
-      return notifier.registerDevice('12345678').then(function(result){
+      return notifier.registerDevice('12345678', context).then(function(result){
         result.should.eql(ret);
         var args = stub.firstCall.args;
         stub.firstCall.args[0].should.equal(deviceNs + '12345678');
@@ -188,11 +191,13 @@ describe('Notification Tests', function(){
       stubGetDoc.returns( Promise.resolve({_id:'12345678', enabled:'true', username:'bob'}) );
       stubUpdate.returns( Promise.resolve({_id:'12345678', enabled:'false', username:'bob'}));
 
-      notifier.onDeregisterUse(function(token, update, next){
+      notifier.onDeregisterUse(function(token, update, context, next){
+        should.exist(context.currentDeviceDocument);
+        context.currentDeviceDocument._id.should.equal('12345678');
         update.$set.setByMiddleware = 'test';
         next();
       });
-      notifier.onDeregisterUse(function(token, update, next){
+      notifier.onDeregisterUse(function(token, update, context, next){
         update.$set.setByMiddleware.should.equal('test');
         update.$set.setByMiddleware = 'pass';
         next();
@@ -216,14 +221,14 @@ describe('Notification Tests', function(){
       stubGetDoc.withArgs(deviceNs + oldToken).returns( Promise.resolve({_id:oldToken, enabled:'true', username:'bob'}) );
       stubUpdate.withArgs(deviceNs + oldToken).returns(Promise.resolve(Promise.resolve({_id:oldToken, enabled:'true', username:'bob'})));
 
-      notifier.onRegisterUse(function(token, update, oldDoc, next){
-        should.exist(oldDoc);
-        update.$set.username = oldDoc.username;
-        update.$set.olddevice = oldDoc._id;
+      notifier.onRegisterUse(function(token, update, context, next){
+        should.exist(context.previousDeviceDocument);
+        update.$set.username = context.previousDeviceDocument.username;
+        update.$set.olddevice = context.previousDeviceDocument._id;
         next();
       });
 
-      return notifier.registerDevice(newToken, oldToken).then(function(result){
+      return notifier.registerDevice(newToken, context, oldToken).then(function(result){
         stubGetDoc.firstCall.args[0].should.equal(deviceNs + newToken);
         stubGetDoc.secondCall.args[0].should.equal(deviceNs + oldToken);
         //first call to update disables old device document
@@ -231,7 +236,7 @@ describe('Notification Tests', function(){
         var args = stubUpdate.firstCall.args;
         args[0].should.equal(deviceNs + oldToken);
         args[2].$set.enabled.should.equal(false);
-        args[2].$set.expired.should.equal(true);
+        args[2].$set.status.should.equal('replaced');
         args[2].$set.replacedByToken.should.equal(newToken);
         //second call creates new device.
         stubUpdate.secondCall.args[0].should.equal(deviceNs + newToken);
@@ -255,7 +260,7 @@ describe('Notification Tests', function(){
       stubUpdate.withArgs(deviceNs + newToken).returns(Promise.resolve(ret));
       stubGetDoc.withArgs(deviceNs + oldToken).returns( Promise.resolve({_id:oldToken, enabled:'true'}) );
       stubUpdate.withArgs(deviceNs + oldToken).throws(new Error('Fail!'));
-      return notifier.registerDevice(newToken, oldToken).then(function(result){
+      return notifier.registerDevice(newToken, context, oldToken).then(function(result){
         result.should.eql(ret);
         stubGetDoc.firstCall.args[0].should.equal(deviceNs + newToken);
         stubGetDoc.secondCall.args[0].should.equal(deviceNs + oldToken);
@@ -285,7 +290,7 @@ describe('Notification Tests', function(){
       stubUpdate.withArgs(deviceNs + newToken).returns(Promise.resolve(ret));
       stubGetDoc.withArgs(deviceNs + oldToken).returns( Promise.resolve({_id:oldToken, enabled:'true'}) );
       stubUpdate.withArgs(deviceNs + oldToken).returns(Promise.reject(new Error('Fail!')));
-      return notifier.registerDevice(newToken, oldToken).then(function(result){
+      return notifier.registerDevice(newToken, context, oldToken).then(function(result){
         result.should.eql(ret);
         stubGetDoc.firstCall.args[0].should.equal(deviceNs + newToken);
         stubGetDoc.secondCall.args[0].should.equal(deviceNs + oldToken);
@@ -316,7 +321,7 @@ describe('Notification Tests', function(){
         var args = stub.firstCall.args;
         stub.firstCall.args[0].should.equal(deviceNs + '12345678');
         var upd = args[2];
-        upd.$set.status.should.equal('ok');
+        upd.$set.status.should.equal('deregistered');
         upd.$set.enabled.should.be.false;
         upd.$inc.registered.should.equal(1);
       });
@@ -462,7 +467,7 @@ describe('Notification Tests', function(){
           var upd = args[2];
           //console.log('reg: ' + tsLastReg.getTime());
           //console.log('fbk: ' + tsFeedback);
-          upd.$set.status.should.equal('ok');
+          upd.$set.status.should.equal('deregistered');
           upd.$set.enabled.should.be.false;
           upd.$set.lastfeedback.should.equal(tsFeedback * 1000);
           upd.$inc.registered.should.equal(1);
