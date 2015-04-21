@@ -1,7 +1,7 @@
 
 # LowlaDB Push Notifications for Node
 
-> Node.js Push Notifications module for LowlaDB Cordova applications
+> Node.js Push Notifications module for [LowlaDB Cordova](https://github.com/lowla/lowladb-cordova) applications
 
 Currently supports notifications for iOS applications using the Apple Push Notification Service.  Future releases will offer support for Android and other platforms.
 
@@ -167,4 +167,4 @@ Note that any additional fields added via middleware will also need to be added 
 
 ## License
 
-liblowladb is available under the MIT license. See the LICENSE file for more info.
+lowladb-node-notify is available under the MIT license. See the LICENSE file for more info.
