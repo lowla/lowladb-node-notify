@@ -20,7 +20,7 @@ describe('Notification Tests', function(){
   var sandbox;
   var apn;
 
-  var deviceNs = 'lowlasync.NotifyApnDevices$'
+  var deviceNs = 'lowlasync.lowlaNotify$'
 
   function setup(){
     //called at more local levels below to allow tests that need spies to wire them first
@@ -53,6 +53,7 @@ describe('Notification Tests', function(){
         stub.firstCall.args[0].should.equal(deviceNs + '12345678');
         var upd = args[2];
         upd.$set.status.should.equal('ok');
+        upd.$set.service.should.equal('apn');
         upd.$set.enabled.should.be.true;
         upd.$set.created.should.be.above(start);
         upd.$set.modified.should.be.above(start);
@@ -75,7 +76,7 @@ describe('Notification Tests', function(){
       var stubGetDoc = sandbox.stub(datastore, 'getDocument');
       stubGetDoc.returns( Promise.reject({isDeleted:true}) );
       stubUpdate.returns( Promise.resolve({}));
-      notifier.register(req, res)
+      notifier.register(req, res);
       return waitFor(function(){return res.done;}).then(function(result){
         stubUpdate.firstCall.args[0].should.equal(deviceNs + '12345678');
         res.body.should.eql({status:'ok'})
@@ -112,7 +113,7 @@ describe('Notification Tests', function(){
               upd.$set.status.should.equal('ok');
               upd.$set.enabled.should.be.true;
               upd.$set.modified.should.be.above(created);
-              should.not.exist(upd.$set.created)
+              should.not.exist(upd.$set.created);
               upd.$inc.registered.should.equal(1);
             });
           });
